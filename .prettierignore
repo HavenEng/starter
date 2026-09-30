@@ -1,0 +1,9 @@
+.next
+node_modules
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+drizzle/
+next-env.d.ts
+src/app/favicon.ico
