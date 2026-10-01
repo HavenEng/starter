@@ -9,21 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: true
-      DATABASE_URL: postgresql://starter:starter@127.0.0.1:5432/starter
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: starter
-          POSTGRES_PASSWORD: starter
-          POSTGRES_DB: starter
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U starter -d starter"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -39,9 +24,6 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm db:check
-      - run: pnpm db:smoke
-      - run: pnpm db:migrate
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e

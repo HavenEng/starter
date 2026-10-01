@@ -54,4 +54,4 @@ Import `getDb` from `src/db` in server code to query PostgreSQL. The connection 
 | `pnpm db:studio`                    | Open Drizzle Studio for `DATABASE_URL`           |
 | `pnpm db:smoke`                     | Verify the PostgreSQL connection                 |
 
-Playwright installs a browser separately: `pnpm exec playwright install chromium`. The GitHub Actions workflow installs the browser and runs formatting, lint, types, unit tests, a PostgreSQL connection and migration check against its temporary database, build, and browser test on pushes and pull requests. It does not deploy or migrate production databases.
+Playwright installs a browser separately: `pnpm exec playwright install chromium`. The GitHub Actions workflow installs the browser and runs formatting, lint, types, unit tests, build, and browser tests on pushes and pull requests. Database checks and migrations run separately from CI.
