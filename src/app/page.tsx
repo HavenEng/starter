@@ -1,4 +1,4 @@
-export default function Home() {
+const Home = () => {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-6 py-16">
       <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase dark:text-blue-400">
@@ -14,4 +14,6 @@ export default function Home() {
       </p>
     </main>
   );
-}
+};
+
+export default Home;
