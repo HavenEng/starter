@@ -4,7 +4,7 @@ test("the starter page loads", async ({ page }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Ready to build." }),
+    page.getByRole("heading", { name: "User and staff authentication" }),
   ).toBeVisible();
   await expect(page).toHaveTitle("Web App Starter");
 });
