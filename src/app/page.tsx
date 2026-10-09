@@ -55,6 +55,70 @@ const Home = () => {
         </ol>
       </section>
 
+      <section
+        aria-labelledby="observability-setup"
+        className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8"
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-semibold tracking-wide text-blue-600 uppercase dark:text-blue-400">
+            Services
+          </p>
+          <h2
+            id="observability-setup"
+            className="text-2xl font-semibold tracking-tight"
+          >
+            Observability setup
+          </h2>
+          <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+            Use Sentry for unexpected browser and server errors, and Pino for
+            server logs in Vercel. No observability configuration is needed to
+            run locally; Sentry reporting stays off during local development and
+            normal CI runs.
+          </p>
+        </div>
+
+        <ol className="mt-6 space-y-4 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+          <li>
+            <strong>Create a Sentry project.</strong> Choose Next.js and use one
+            project for both browser and server errors.
+          </li>
+          <li>
+            <strong>Configure error reporting.</strong> In Vercel’s Production
+            and Preview environments, set{" "}
+            <code className="break-all">NEXT_PUBLIC_SENTRY_DSN</code> and{" "}
+            <code>SENTRY_DSN</code> to the same project DSN before deploying.
+          </li>
+          <li>
+            <strong>Enable source-map uploads.</strong> Add{" "}
+            <code>SENTRY_AUTH_TOKEN</code>, <code>SENTRY_ORG</code>, and{" "}
+            <code>SENTRY_PROJECT</code> in Vercel. Use a token with
+            source-map/release upload permissions; keep it server-only and out
+            of source control.
+          </li>
+          <li>
+            <strong>Verify a preview.</strong> Deploy a preview and check that
+            browser and server errors appear in Sentry under the preview
+            environment with readable stacks. Open Vercel’s Logs to check
+            request logs and severity filters before rolling out to production.
+          </li>
+        </ol>
+
+        <div className="mt-6 space-y-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          <p>
+            Pino needs no separate logging service. Optionally set{" "}
+            <code>LOG_LEVEL</code>; it defaults to <code>info</code> on Vercel
+            and <code>debug</code> locally. Passwords and credentials are
+            redacted; contact details are permitted in log messages.
+          </p>
+          <p>
+            Read <code className="break-all">docs/OBSERVABILITY.md</code> in the
+            repository for the full setup and verification steps, privacy rules,
+            and instructions for disabling reporting. The configuration
+            variables are listed in <code>.env.example</code>.
+          </p>
+        </div>
+      </section>
+
       <section className="space-y-3">
         <h2 className="text-xl font-semibold tracking-tight">Run locally</h2>
         <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">

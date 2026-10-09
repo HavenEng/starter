@@ -60,6 +60,14 @@ If signup creates a Firebase account but cannot start the app session, the form 
 
 Session and logout origin checks compare the browser's `Origin` against the request protocol and HTTP `Host`, preserving loopback hostnames such as `127.0.0.1`. Reverse proxies must preserve the public `Host` and supply the correct protocol to Next.js.
 
+## Observability
+
+Sentry reports unexpected browser/server errors in configured Vercel production and preview deployments. Pino writes structured server logs to Vercel's existing Runtime Logs viewer. Tracing, profiling, Session Replay, and Sentry Logs are disabled. Normal local development, CI, and unconfigured builds work without sending Sentry events.
+
+Set both Sentry DSNs and the server-only source-map upload settings from `.env.example` in Vercel, then redeploy. See [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) for setup, privacy filtering, request IDs, cost/retention limits, verification, and disabling reporting.
+
+The landing page includes an observability setup checklist covering Sentry configuration, source-map upload credentials, preview verification, and Pino logging defaults.
+
 ## Commands
 
 | Command                             | Purpose                                          |
@@ -78,3 +86,5 @@ Session and logout origin checks compare the browser's `Origin` against the requ
 | `pnpm db:smoke`                     | Verify the PostgreSQL connection                 |
 
 Playwright installs a browser separately: `pnpm exec playwright install chromium`. The GitHub Actions workflow installs the browser and runs formatting, lint, types, unit tests, build, and browser tests on pushes and pull requests. Database checks and migrations run separately from CI.
+
+Run `pnpm test:e2e --config playwright.observability.config.ts` for the additional production-build observability suite with a local mock Sentry collector. It uses no remote Sentry credentials or quota; CI runs it after the regular browser suite.

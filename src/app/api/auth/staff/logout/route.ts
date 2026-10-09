@@ -1,6 +1,7 @@
-import type { NextRequest } from "next/server";
 import { clearSession } from "@/lib/auth/session-handlers";
+import { withRequestLogging } from "@/lib/observability/request-logging";
 
-export async function POST(request: NextRequest) {
-  return clearSession(request, "staff");
-}
+export const POST = withRequestLogging(
+  (request) => clearSession(request, "staff"),
+  { route: "/api/auth/staff/logout", audience: "staff" },
+);

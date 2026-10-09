@@ -13,6 +13,11 @@ import { useRouter } from "next/navigation";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getAuthPath, getSessionApiPath } from "@/lib/auth/audience";
 import { getFirebaseAuth } from "@/lib/firebase/client";
+import {
+  AuthResponseError,
+  reportUnexpectedError,
+  SENTRY_EVENT_ID_HEADER,
+} from "@/lib/observability/report";
 
 type AuthFormProps = {
   mode: "login" | "signup";
@@ -59,7 +64,12 @@ async function establishServerSession(idToken: string, audience: AuthAudience) {
       typeof body === "object" && body !== null && "error" in body
         ? String(body.error)
         : "We could not start your session. Please try again.";
-    throw new Error(message);
+    throw new AuthResponseError(
+      message,
+      response.status,
+      response.headers?.get("x-request-id") ?? undefined,
+      response.headers?.get(SENTRY_EVENT_ID_HEADER) ?? undefined,
+    );
   }
 }
 
@@ -100,6 +110,10 @@ const AuthForm = ({ mode, audience = "user" }: AuthFormProps) => {
 
       await finishSignIn(await credential.user.getIdToken());
     } catch (submitError) {
+      reportUnexpectedError(submitError, {
+        operation: "auth.sign-in",
+        audience,
+      });
       setError(getAuthErrorMessage(submitError));
       setIsSubmitting(false);
     }

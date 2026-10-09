@@ -5,6 +5,7 @@ import { getUserByFirebaseUid } from "@/db/users";
 import { getStaffUserByFirebaseUid } from "@/db/staff-users";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
+import { reportUnexpectedError } from "@/lib/observability/report";
 
 export const USER_SESSION_COOKIE_NAME = "firebase_session";
 export const STAFF_SESSION_COOKIE_NAME = "firebase_staff_session";
@@ -24,7 +25,11 @@ async function getSessionClaims(audience: AuthAudience, cookieName: string) {
       sessionCookie,
       true,
     );
-  } catch {
+  } catch (error) {
+    reportUnexpectedError(error, {
+      operation: "auth.verify-session",
+      audience,
+    });
     return null;
   }
 

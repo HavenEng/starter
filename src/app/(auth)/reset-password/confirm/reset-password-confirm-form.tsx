@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getAuthPath } from "@/lib/auth/audience";
 import { getFirebaseAuth } from "@/lib/firebase/client";
+import { reportUnexpectedError } from "@/lib/observability/report";
 
 type ResetPasswordConfirmFormProps = {
   oobCode: string;
@@ -73,6 +74,10 @@ const ResetPasswordConfirmForm = ({
         setVerification("ready");
       } catch (verifyError) {
         if (!active) return;
+        reportUnexpectedError(verifyError, {
+          operation: "auth.verify-password-reset",
+          audience,
+        });
         setVerificationError(getVerificationErrorMessage(verifyError));
         setVerification("invalid");
       }
@@ -96,6 +101,10 @@ const ResetPasswordConfirmForm = ({
       setEmail(verifiedEmail);
       setVerification("ready");
     } catch (verifyError) {
+      reportUnexpectedError(verifyError, {
+        operation: "auth.verify-password-reset",
+        audience,
+      });
       setVerificationError(getVerificationErrorMessage(verifyError));
       setVerification("invalid");
     }
@@ -120,6 +129,10 @@ const ResetPasswordConfirmForm = ({
       await confirmPasswordReset(getFirebaseAuth(audience), oobCode, password);
       setVerification("complete");
     } catch (submitError) {
+      reportUnexpectedError(submitError, {
+        operation: "auth.confirm-password-reset",
+        audience,
+      });
       setError(getConfirmErrorMessage(submitError));
     } finally {
       setIsSubmitting(false);

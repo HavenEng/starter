@@ -46,6 +46,12 @@ App Router layouts can be reused or skipped during partial RSC requests and do n
 
 Session reads in [`src/lib/auth/session.ts`](../src/lib/auth/session.ts) verify Firebase session cookies with revocation checks and look up the UID in the corresponding table. The app does not use a Next.js Proxy for auth checks.
 
+## Error reporting and request logs
+
+Session/logout endpoints log one completion record and add a generated `x-request-id` to returned responses. Existing validation, status codes, cookies, and redirects are preserved. Unexpected failures caught during sign-in, logout, password reset, and server verification are reported to Sentry when configured. Expected errors are classified by operation: browser credential/validation failures, reset-link errors, and server malformed/expired/revoked tokens are suppressed; Firebase Admin credential/configuration failures are reported. Returned 5xx failures are captured by the wrapper and include `x-sentry-event-id` when server reporting is enabled. Auth clients report HTTP 5xx responses unless that header acknowledges server capture, covering gateway failures that never reach the app. Server-render errors carrying a digest are not reported again by browser error boundaries. See [Observability](OBSERVABILITY.md) for correlation and delivery limits.
+
+Passwords, credentials, cookies, and Firebase tokens/reset codes are redacted from structured logs, Node console output, and Sentry events. Contact details are permitted in log messages; Sentry still removes user/contact fields and request bodies. The console guard copies errors for output without changing the original auth exceptions. See [`OBSERVABILITY.md`](OBSERVABILITY.md) for configuration, privacy boundaries, request correlation, and automated/live validation.
+
 ## Database
 
 [`src/db/schema.ts`](../src/db/schema.ts) defines `users` and `staff_users`. Both records have an internal UUID, a unique Firebase UID within that table, email, display name, email-verification state, and timestamps. [`src/db/users.ts`](../src/db/users.ts) syncs regular-user claims; [`src/db/staff-users.ts`](../src/db/staff-users.ts) syncs staff claims. Application tables should reference the appropriate internal UUID.

@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  AuthResponseError,
+  reportUnexpectedError,
+  SENTRY_EVENT_ID_HEADER,
+} from "@/lib/observability/report";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getSessionApiPath } from "@/lib/auth/audience";
 
@@ -28,8 +33,18 @@ const LogoutButton = ({ audience = "user" }: LogoutButtonProps) => {
         router.replace(audience === "staff" ? "/staff/login" : "/");
         return;
       }
+      reportUnexpectedError(
+        new AuthResponseError(
+          "Logout request failed",
+          response.status,
+          response.headers.get("x-request-id") ?? undefined,
+          response.headers.get(SENTRY_EVENT_ID_HEADER) ?? undefined,
+        ),
+        { operation: "auth.logout", audience },
+      );
       setError("We could not sign you out. Please try again.");
-    } catch {
+    } catch (error) {
+      reportUnexpectedError(error, { operation: "auth.logout", audience });
       setError("We could not sign you out. Please try again.");
     } finally {
       setIsSubmitting(false);

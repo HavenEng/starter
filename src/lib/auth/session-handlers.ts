@@ -9,6 +9,8 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/auth/read-request-body";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
+import { reportUnexpectedError } from "@/lib/observability/report";
+import { getRequestId } from "@/lib/observability/request-logging";
 import {
   SESSION_DURATION_MS,
   STAFF_SESSION_COOKIE_NAME,
@@ -93,7 +95,12 @@ export async function createSession(
 
   try {
     claims = await firebaseAuth.verifyIdToken(idToken);
-  } catch {
+  } catch (error) {
+    reportUnexpectedError(error, {
+      operation: "auth.verify-id-token",
+      audience,
+      requestId: getRequestId(),
+    });
     return reject("The Firebase sign-in token is invalid.", 401);
   }
 

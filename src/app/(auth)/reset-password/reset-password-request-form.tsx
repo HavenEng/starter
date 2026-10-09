@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getAuthPath } from "@/lib/auth/audience";
 import { getFirebaseAuth } from "@/lib/firebase/client";
+import { reportUnexpectedError } from "@/lib/observability/report";
 
 type ResetPasswordRequestFormProps = {
   audience?: AuthAudience;
@@ -53,6 +54,10 @@ const ResetPasswordRequestForm = ({
       await sendPasswordResetEmail(getFirebaseAuth(audience), submittedEmail);
       setSent(true);
     } catch (submitError) {
+      reportUnexpectedError(submitError, {
+        operation: "auth.request-password-reset",
+        audience,
+      });
       const code =
         typeof submitError === "object" &&
         submitError !== null &&
