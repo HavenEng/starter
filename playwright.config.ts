@@ -13,7 +13,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "node_modules/.bin/next dev --hostname 127.0.0.1 --port 3100",
+    command: "pnpm dev --hostname 127.0.0.1 --port 3100",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     gracefulShutdown: { signal: "SIGTERM", timeout: 1_000 },

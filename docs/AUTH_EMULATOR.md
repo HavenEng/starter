@@ -49,7 +49,7 @@ The browser flag is derived by the build; setting only `NEXT_PUBLIC_AUTH_E2E` ca
 
 Local production-mode tests are supported: `NODE_ENV=production` does not disable emulation. The runner binds the app to loopback. Do not copy these test flags into a deployment.
 
-Normal `pnpm dev` can use real development Firebase projects from `.env.local`. It does not need emulator flags or an app-environment marker. The automated suite supplies its own local marker and overrides service configuration.
+Normal `pnpm dev` (or `npm run dev`) starts the development PostgreSQL container from `compose.yaml`, waits for it to be healthy, then starts Next.js. It can use real development Firebase projects from `.env.local` and does not need emulator flags or an app-environment marker. The auth suite starts its separate disposable database through its own runner, supplies its own local marker, and overrides service configuration.
 
 ## Coverage and fixtures
 
