@@ -1,7 +1,9 @@
 import * as Sentry from "@sentry/nextjs";
 import type { Instrumentation } from "next";
+import { assertAuthBuildMode } from "./lib/firebase/emulator-config";
 
 export async function register() {
+  assertAuthBuildMode(process.env.NEXT_PUBLIC_AUTH_E2E);
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { installConsoleRedaction } =
       await import("./lib/observability/console");

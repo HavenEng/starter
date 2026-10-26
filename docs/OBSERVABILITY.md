@@ -69,6 +69,8 @@ pnpm test
 pnpm build
 pnpm test:e2e
 pnpm test:e2e --config playwright.observability.config.ts
+pnpm test:e2e:auth
+pnpm test:auth-harness
 ```
 
 The regular Playwright suite checks the existing auth behavior, generated request IDs, and that synthetic fixture routes and the root-error cookie cannot trigger failures during ordinary app runs. The observability suite builds and starts the real app in production mode using `.next-observability`, sends SDK envelopes to a localhost collector, and checks browser/server capture, server-render and acknowledged-response deduplication, app/global fallback and retry, gateway failures through the logout UI, Admin configuration failures versus token expiry, request correlation, and credential scrubbing. The collector retains complete stdout/stderr, including unstructured Next.js errors; every production test checks both streams for fixture credentials. Console fixtures also check contact-detail retention, valid Pino JSON, interpolation, and child binding filtering. Unit tests exercise encoded JSON, URL variants, nested errors, circular objects, and the installed SDK's upload failure path with its CLI network boundary replaced by a synthetic failure. It requires ports 3101 and 4319; normal browser tests use 3100. CI runs both suites.
@@ -78,3 +80,5 @@ Only the local test runner sets `OBSERVABILITY_E2E=1`. Test fixtures require tha
 Before production rollout, use a temporary verification change in a configured preview to trigger one browser failure and one server failure; remove that change before merging. Verify both appear under `preview` with the commit release, readable source-mapped stacks, no sensitive payloads, and matching request IDs where applicable. Check a successful, rejected, and failed API request in Vercel's severity filters. Review Sentry usage after launch.
 
 Automated tests verify local SDK delivery and production app/root-layout crash recovery. Sentry's remote processing, actual source-map uploads, and Vercel's UI require Sentry/Vercel credentials and a configured preview deployment.
+
+The separate [Auth Emulator suite](AUTH_EMULATOR.md) uses `.next-auth-e2e`, explicitly disables Sentry and observability fixtures, and verifies real authentication SDK/database flows with local services. Run the suites sequentially; auth emulator mode and observability fixture mode cannot share an app server. Run its harness checks afterward to validate compiled deployment guards, proxy routing, and interrupted-service cleanup. Token exchange now checks revocation before database synchronization; those expected authentication rejections retain the existing reporting classification.

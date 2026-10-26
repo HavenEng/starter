@@ -20,7 +20,7 @@ After Firebase sign-in, the browser sends the ID token to the audience-specific 
 - Regular users: `POST /api/auth/session`
 - Staff: `POST /api/auth/staff/session`
 
-[`src/lib/auth/session-handlers.ts`](../src/lib/auth/session-handlers.ts) checks request origin, content type, request size, token validity, the Email/Password provider claim, and that authentication happened within five minutes. It verifies each token with the matching Firebase Admin project. Regular-user identity is upserted into `users`; staff identity must already exist in `staff_users` and its profile is refreshed. It then creates a five-day Firebase session cookie. The regular-user cookie keeps its existing name, `firebase_session`; the staff cookie is `firebase_staff_session`.
+[`src/lib/auth/session-handlers.ts`](../src/lib/auth/session-handlers.ts) checks request origin, content type, request size, token validity and revocation, the Email/Password provider claim, and that authentication happened within five minutes. It verifies each token with the matching Firebase Admin project using revocation checks before synchronizing database profiles, rejecting disabled or revoked identities. The recent-authentication policy rejects missing, non-integer, stale, or future timestamps. Regular-user identity is upserted into `users`; staff identity must already exist in `staff_users` and its profile is refreshed. It then creates a five-day Firebase session cookie. The regular-user cookie keeps its existing name, `firebase_session`; the staff cookie is `firebase_staff_session`.
 
 The browser signs out of the Firebase client SDK after the server cookie is created. The cookies are `httpOnly`, `SameSite=Lax`, scoped to `/`, and marked `Secure` in production. Separate logout endpoints clear the corresponding cookie.
 
@@ -70,6 +70,7 @@ See [`.env.example`](../.env.example) for all required variable names.
 - Server-only Admin credentials: `FIREBASE_USER_PROJECT_ID`, `FIREBASE_USER_CLIENT_EMAIL`, `FIREBASE_USER_PRIVATE_KEY`, and the matching `FIREBASE_STAFF_*` variables.
 - Both Firebase projects should enable Email/Password and disable other providers. Each needs the app hostnames authorized and its reset email action URL configured for the corresponding route.
 - Vercel needs both public configs at build time and both Admin credential sets at runtime.
+- Declare `APP_ENV=preview` or `APP_ENV=production` at deployment build and runtime, including on non-Vercel hosts. Emulator tests require `APP_ENV=local`; they reject known hosting metadata and compiled/runtime mode mismatches. Normal real-Firebase development does not need this marker.
 - To provision a staff member, create the email/password account in the staff Firebase project, then insert that account's UID and email into `staff_users` before its first login.
 
 After applying migrations, an administrator can add the allow-list row with:
@@ -85,9 +86,11 @@ The repository contains placeholders only; it does not include either Firebase p
 
 - Email verification is recorded but not required for sign-in or access.
 - Staff provisioning, account deletion, and profile management are manual or not implemented in the app.
-- There is no Firebase Auth Emulator configuration or automated coverage of successful Firebase sign-in, staff provisioning, or password reset against Firebase.
+- Real Firebase credentials, authorized domains, email-template links, and actual reset-email delivery require verification in each copied app's deployed environment.
 - Future staff pages and API handlers must perform their own `requireStaffUser()` checks before accessing protected data.
 
 ## Implementation checks
+
+Run `pnpm test:e2e:auth` for production-build integration coverage against separate user/staff Auth Emulators and disposable PostgreSQL. It verifies signup/login, profile synchronization, provisioning, cookies, logout, valid cross-project tokens/cookies, disabled accounts, staff allow-list removal, both reset flows, explicit revocation, password-reset session invalidation, expiry, recent-authentication failures, and provider rejection. Rejected exchanges leave profiles unchanged. The runner overrides service configuration and applies committed migrations to an empty test database. Follow it with `pnpm test:auth-harness` for proxy, deployment boundary, port ownership, and interrupted cleanup checks. See [Auth Emulator tests](AUTH_EMULATOR.md) for lifecycle and each copied app's deployment checklist. CI runs these checks without Firebase secrets or real infrastructure.
 
 Run `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm db:check`, `pnpm test`, `pnpm build`, and `pnpm test:e2e` when validating changes. Unit tests cover signup recovery with mocked Firebase/session services and body-reading limits, including UTF-8 chunk boundaries and streams that never finish. The Playwright suite covers the home page, signed-out account/staff redirects, full and partial RSC authorization, rejection of regular-user cookies on staff pages, same-origin session validation and logout on both loopback hostnames, rejection of missing or foreign origins, and oversized declared/chunked requests. These tests do not require Firebase credentials or a database connection.

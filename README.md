@@ -68,6 +68,12 @@ Set both Sentry DSNs and the server-only source-map upload settings from `.env.e
 
 The landing page includes an observability setup checklist covering Sentry configuration, source-map upload credentials, preview verification, and Pino logging defaults.
 
+## Authentication integration tests
+
+Run `pnpm test:e2e:auth` with Docker running and Playwright Chromium installed. The runner starts separate user/staff Auth Emulators, migrates disposable PostgreSQL, and tests a production build of the app. It needs no Firebase projects, credentials, or `.env.local` setup and leaves the development database untouched. The copied GitHub Actions workflow runs the same suite without secrets. See [`docs/AUTH_EMULATOR.md`](docs/AUTH_EMULATOR.md) for ports, fixtures, cleanup, and deployed-copy verification.
+
+The suite includes revocation, expiry, recent-authentication boundaries, and password-reset invalidation of existing sessions. Run `pnpm test:auth-harness` afterward for proxy, deployment guard, occupied-port, and interruption cleanup checks. Normal `pnpm dev` can continue using real development Firebase projects. Set `APP_ENV=preview` or `APP_ENV=production` on deployed copies; only the isolated runner enables local emulator mode. The starter requires no live preview, mailbox provider, or live-test secrets.
+
 ## Commands
 
 | Command                             | Purpose                                          |
@@ -79,12 +85,14 @@ The landing page includes an observability setup checklist covering Sentry confi
 | `pnpm typecheck`                    | Check TypeScript types                           |
 | `pnpm test` / `pnpm test:watch`     | Run or watch Vitest unit tests                   |
 | `pnpm test:e2e`                     | Start the app and run Chromium Playwright tests  |
+| `pnpm test:e2e:auth`                | Test auth with Firebase emulators and PostgreSQL |
+| `pnpm test:auth-harness`            | Check auth proxy, deployment guards, and cleanup |
 | `pnpm db:generate`                  | Generate SQL migrations from TypeScript schema   |
 | `pnpm db:migrate`                   | Apply generated SQL migrations to `DATABASE_URL` |
 | `pnpm db:check`                     | Check generated migration history for conflicts  |
 | `pnpm db:studio`                    | Open Drizzle Studio for `DATABASE_URL`           |
 | `pnpm db:smoke`                     | Verify the PostgreSQL connection                 |
 
-Playwright installs a browser separately: `pnpm exec playwright install chromium`. The GitHub Actions workflow installs the browser and runs formatting, lint, types, unit tests, build, and browser tests on pushes and pull requests. Database checks and migrations run separately from CI.
+Playwright installs a browser separately: `pnpm exec playwright install chromium`. GitHub Actions installs the browser and runs formatting, lint, types, unit tests, migration-history checks, build, all three browser suites, and auth harness checks on pushes and pull requests. Auth integration tests apply migrations to a disposable database; production migrations remain an explicit deployment step.
 
 Run `pnpm test:e2e --config playwright.observability.config.ts` for the additional production-build observability suite with a local mock Sentry collector. It uses no remote Sentry credentials or quota; CI runs it after the regular browser suite.

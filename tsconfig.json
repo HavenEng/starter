@@ -30,7 +30,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     ".next-observability/types/**/*.ts",
-    ".next-observability/dev/types/**/*.ts"
+    ".next-observability/dev/types/**/*.ts",
+    ".next-auth-e2e/types/**/*.ts",
+    ".next-auth-e2e/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

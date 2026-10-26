@@ -1,8 +1,9 @@
 "use client";
 
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { connectAuthEmulator, getAuth } from "firebase/auth";
 import type { AuthAudience } from "@/lib/auth/audience";
+import { AUTH_EMULATOR_PROJECTS, AUTH_EMULATOR_URL } from "./emulator-config";
 
 export function getFirebaseAuth(audience: AuthAudience = "user") {
   const config =
@@ -29,10 +30,18 @@ export function getFirebaseAuth(audience: AuthAudience = "user") {
     );
   }
 
+  if (
+    process.env.NEXT_PUBLIC_AUTH_E2E === "1" &&
+    config.projectId !== AUTH_EMULATOR_PROJECTS[audience]
+  ) {
+    throw new Error("Auth Emulator tests require the matching demo project.");
+  }
   const appName = `starter-firebase-${audience}`;
-  const app = getApps().some((existingApp) => existingApp.name === appName)
-    ? getApp(appName)
-    : initializeApp(config, appName);
-
-  return getAuth(app);
+  const exists = getApps().some((existingApp) => existingApp.name === appName);
+  const app = exists ? getApp(appName) : initializeApp(config, appName);
+  const auth = getAuth(app);
+  if (!exists && process.env.NEXT_PUBLIC_AUTH_E2E === "1") {
+    connectAuthEmulator(auth, AUTH_EMULATOR_URL, { disableWarnings: true });
+  }
+  return auth;
 }

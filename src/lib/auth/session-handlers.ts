@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateStaffUserFromFirebase } from "@/db/staff-users";
 import { syncUserFromFirebase } from "@/db/users";
 import type { AuthAudience } from "@/lib/auth/audience";
+import { isRecentAuthentication } from "@/lib/auth/recent-auth";
 import {
   readRequestBody,
   RequestBodyTooLargeError,
@@ -18,7 +19,6 @@ import {
 } from "@/lib/auth/session";
 
 const MAX_REQUEST_BYTES = 12_000;
-const MAX_AUTH_AGE_SECONDS = 5 * 60;
 
 function reject(message: string, status: number) {
   return NextResponse.json(
@@ -94,7 +94,7 @@ export async function createSession(
   let claims;
 
   try {
-    claims = await firebaseAuth.verifyIdToken(idToken);
+    claims = await firebaseAuth.verifyIdToken(idToken, true);
   } catch (error) {
     reportUnexpectedError(error, {
       operation: "auth.verify-id-token",
@@ -108,8 +108,7 @@ export async function createSession(
     return reject("Only email/password sign-in is supported.", 403);
   }
 
-  const authAgeSeconds = Math.floor(Date.now() / 1000) - claims.auth_time;
-  if (authAgeSeconds < 0 || authAgeSeconds > MAX_AUTH_AGE_SECONDS) {
+  if (!isRecentAuthentication(claims.auth_time)) {
     return reject("Please sign in again to start a session.", 401);
   }
 

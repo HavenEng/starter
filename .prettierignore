@@ -1,5 +1,8 @@
 .next
 .next-observability
+.next-auth-e2e
+firebase-debug.log*
+*-debug.log
 node_modules
 coverage
 playwright-report

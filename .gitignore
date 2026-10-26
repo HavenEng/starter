@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /.next-observability/
+/.next-auth-e2e/
 /out/
 
 # production
@@ -30,6 +31,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+firebase-debug.log*
+*-debug.log
 
 # env files
 .env*
