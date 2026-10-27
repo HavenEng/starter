@@ -16,11 +16,12 @@
     "test:e2e": "playwright test",
     "test:e2e:auth": "pnpm test:e2e --config playwright.auth.config.ts",
     "test:auth-harness": "node --test --test-concurrency=1 tests/auth-harness/*.test.mjs",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "node scripts/db-generate.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
-    "db:smoke": "node scripts/db-smoke.mjs"
+    "db:smoke": "node scripts/db-smoke.mjs",
+    "db:seed": "node scripts/db-seed.mjs"
   },
   "engines": {
     "node": ">=24 <25",

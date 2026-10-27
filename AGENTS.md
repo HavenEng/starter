@@ -12,6 +12,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 The top-level `docs/` directory contains overviews for the services and integrations used by this app. Before changing a service, check for its existing documentation in `docs/` and elsewhere in the repository. Update the relevant docs alongside the implementation whenever a change affects documented setup, configuration, behavior, routes, security boundaries, or known gaps. Add new service overviews under `docs/`.
 
+## Database migrations
+
+Use descriptive snake_case migration names, for example `pnpm db:generate --name add_customer_preferences`. The wrapper requires a name; do not generate random names through the underlying Drizzle CLI. Commit SQL, snapshots, and journal metadata together. Preserve previously committed migration contents and ordering.
+
 ## End-to-end validation
 
 Every feature implementation must include end-to-end validation before it is considered complete. Add or update Playwright tests when user-visible behavior changes, and run the relevant tests with `pnpm test:e2e` (use the full suite when the affected scope is unclear). Fix failures caused by the implementation and report the validation results. If the tests cannot run, state the reason and what remains unvalidated.

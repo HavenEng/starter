@@ -8,6 +8,13 @@
       "when": 1791385153847,
       "tag": "0000_initial_auth_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792983700471,
+      "tag": "0001_staff_roles_account_status_and_rate_limits",
+      "breakpoints": true
     }
   ]
 }
