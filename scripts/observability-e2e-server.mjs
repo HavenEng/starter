@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createGunzip } from "node:zlib";
+import { createTestDatabase } from "./e2e-database.mjs";
 
 if (process.env.VERCEL || process.env.VERCEL_ENV)
   throw new Error("Observability fixtures are local-only.");
@@ -49,6 +50,25 @@ const collector = createServer(async (request, response) => {
   }
   response.end("{}");
 });
+let stopDatabase;
+let stopping;
+async function stop(code = 0) {
+  if (stopping) return stopping;
+  stopping = (async () => {
+    if (next && next.exitCode === null) {
+      const exited = new Promise((resolve) => next.once("exit", resolve));
+      next.kill("SIGTERM");
+      await exited;
+    }
+    collector.close();
+    await stopDatabase?.();
+    process.exit(code);
+  })();
+  return stopping;
+}
+process.on("SIGTERM", () => void stop());
+process.on("SIGINT", () => void stop());
+
 await new Promise((resolve) => collector.listen(4319, "127.0.0.1", resolve));
 
 const env = {
@@ -94,21 +114,20 @@ function launch(args) {
   return child;
 }
 
-function stop() {
-  next?.kill("SIGTERM");
-  collector.close();
+try {
+  stopDatabase = await createTestDatabase(5435, env, (cleanup) => {
+    stopDatabase = cleanup;
+  });
+} catch {
+  await stop(1);
 }
-process.on("SIGTERM", stop);
-process.on("SIGINT", stop);
 
 next = launch(["build", "--webpack"]);
 const result = await new Promise((resolve) => next.once("exit", resolve));
 if (result !== 0) {
-  collector.close();
-  process.exit(result || 1);
+  await stop(result || 1);
 }
 next = launch(["start", "--hostname", "127.0.0.1", "--port", "3101"]);
 next.once("exit", (code) => {
-  collector.close();
-  process.exit(code || 0);
+  if (!stopping) void stop(code || 0);
 });

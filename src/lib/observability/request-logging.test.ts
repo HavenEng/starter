@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { errors } from "@/lib/api/application-error";
+import { withApiHandler } from "@/lib/api/handler";
 import {
   getErrorRequestId,
   getRequestId,
@@ -15,9 +17,13 @@ const mocks = vi.hoisted(() => ({
   setTag: vi.fn(),
   capture: vi.fn(() => "a".repeat(32)),
   enabled: vi.fn(() => true),
+  consume: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
-vi.mock("./logger", () => ({ logger: { child: mocks.child } }));
+vi.mock("./logger", () => ({
+  logger: { child: mocks.child, error: mocks.error },
+}));
+vi.mock("@/lib/rate-limit/store", () => ({ enforceRateLimit: mocks.consume }));
 vi.mock("@sentry/nextjs", () => ({
   captureException: mocks.capture,
   isEnabled: mocks.enabled,
@@ -33,6 +39,97 @@ beforeEach(() => {
 });
 
 describe("request logging", () => {
+  it("reports a recovered logout limiter failure and completes the successful request once", async () => {
+    const error = errors.unavailable(new Error("Store unavailable"));
+    mocks.consume.mockRejectedValueOnce(error);
+    const response = await withApiHandler<undefined>(
+      async () =>
+        new Response(null, {
+          headers: { "Set-Cookie": "session=; Max-Age=0" },
+        }),
+      { route: "/api/auth/staff/logout", audience: "staff" },
+    )(
+      new NextRequest("http://localhost/api/auth/staff/logout", {
+        method: "POST",
+      }),
+      undefined,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(mocks.info).toHaveBeenCalledExactlyOnceWith(
+      { status: 200, durationMs: expect.any(Number) },
+      "Request completed",
+    );
+    expect(mocks.error).toHaveBeenCalledExactlyOnceWith(
+      {
+        operation: "rate-limit.consume",
+        audience: "staff",
+        requestId: response.headers.get("x-request-id"),
+        errorCode: "SERVICE_UNAVAILABLE",
+      },
+      "Request dependency failed",
+    );
+    expect(mocks.capture).toHaveBeenCalledExactlyOnceWith(error, {
+      tags: {
+        operation: "rate-limit.consume",
+        audience: "staff",
+        requestId: response.headers.get("x-request-id"),
+        errorCode: "SERVICE_UNAVAILABLE",
+      },
+    });
+  });
+  it("preserves recovered logout success when diagnostic sinks fail", async () => {
+    mocks.consume.mockRejectedValueOnce(errors.unavailable());
+    mocks.error.mockImplementationOnce(() => {
+      throw new Error("Broken sink");
+    });
+    mocks.capture.mockImplementationOnce(() => {
+      throw new Error("Broken reporting");
+    });
+    const response = await withApiHandler<undefined>(
+      async () => Response.json({ ok: true }),
+      {
+        route: "/api/auth/logout",
+        audience: "user",
+      },
+    )(
+      new NextRequest("http://localhost/api/auth/logout", { method: "POST" }),
+      undefined,
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.info).toHaveBeenCalledOnce();
+  });
+  it("serializes unknown failures without leaking causes and completes logging once", async () => {
+    const response = await withRequestLogging(
+      async () => {
+        throw new Error("password=private-password");
+      },
+      { route: "/api/example" },
+      true,
+    )(new NextRequest("http://localhost/api/example"));
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Service unavailable. Please try again.",
+      code: "INTERNAL_ERROR",
+      requestId: response.headers.get("x-request-id"),
+    });
+    expect(mocks.error).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledOnce();
+  });
+  it("keeps rate-limit correlation internal and returns only a generic rejection", async () => {
+    const response = await withRequestLogging(
+      async () => {
+        throw errors.limited();
+      },
+      { route: "/api/example" },
+      true,
+    )(new NextRequest("http://localhost/api/example"));
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "Too many requests" });
+    expect(response.headers.has("x-request-id")).toBe(false);
+    expect(mocks.warn).toHaveBeenCalledOnce();
+    expect(mocks.capture).not.toHaveBeenCalled();
+  });
   it.each([
     [200, "info"],
     [403, "warn"],

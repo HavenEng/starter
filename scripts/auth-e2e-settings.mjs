@@ -42,6 +42,9 @@ export function getAuthTestEnvironment(source = process.env) {
     CI: "true",
     DEBUG: "",
     LOG_LEVEL: "warn",
+    RATE_LIMIT_KEY_SECRET: "isolated-auth-e2e-rate-limit-secret",
+    RATE_LIMIT_TEST_MODE: "high",
+    RATE_LIMIT_TRUSTED_IP_HEADER: "",
     NEXT_TELEMETRY_DISABLED: "1",
   };
   // Playwright can inherit both color flags; keep service output unambiguous.

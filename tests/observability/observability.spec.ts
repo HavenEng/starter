@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { Pool } from "pg";
 
 const collector = "http://127.0.0.1:4319";
 type Event = {
@@ -32,6 +33,7 @@ test.afterEach(async ({ request }) => {
     "console-fragment-secret",
     "pino-interpolated-secret",
     "child-fixture-secret",
+    "unconfirmed-password-secret",
   ])
     expect(combined).not.toContain(secret);
 });
@@ -342,4 +344,138 @@ test("captures an unhandled route failure with its logged request ID", async ({
   expect(log).toMatchObject({ status: 500, level: 50, stream: "error" });
   expect(event.tags?.requestId).toBe(log.requestId);
   expect(JSON.stringify(event)).not.toContain("db-password");
+});
+
+test("retains safe provider diagnostics internally while returning a generic failure", async ({
+  request,
+}) => {
+  const response = await request.get(
+    "/api/observability-test?mode=provider-error",
+  );
+  expect(response.status()).toBe(503);
+  const body = await response.text();
+  expect(body).not.toContain("OPERATION_NOT_ALLOWED");
+  expect(body).not.toContain("FirebasePasswordError");
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${collector}/events`)).json()).length,
+    )
+    .toBe(1);
+  const [event]: Event[] = await (
+    await request.get(`${collector}/events`)
+  ).json();
+  expect(
+    event.exception?.values.some((value) =>
+      value.value.includes(
+        "Firebase staff update failed (OPERATION_NOT_ALLOWED; HTTP 400)",
+      ),
+    ),
+  ).toBe(true);
+  const logs = await (await request.get(`${collector}/logs`)).json();
+  expect(logs).toHaveLength(1);
+  expect(logs[0]).toMatchObject({
+    status: 503,
+    errorCode: "SERVICE_UNAVAILABLE",
+    level: 50,
+  });
+});
+
+test("captures an unconfirmed password update once and returns its safe recovery code", async ({
+  request,
+}) => {
+  const response = await request.get(
+    "/api/observability-test?mode=password-update-unconfirmed",
+  );
+  expect(response.status()).toBe(503);
+  expect(await response.json()).toEqual({
+    error: "Service unavailable. Please try again.",
+    code: "PASSWORD_CHANGE_UNCONFIRMED",
+    requestId: response.headers()["x-request-id"],
+  });
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`${collector}/events`)).json()).length,
+    )
+    .toBe(1);
+  const [event]: Event[] = await (
+    await request.get(`${collector}/events`)
+  ).json();
+  expect(event.event_id).toBe(response.headers()["x-sentry-event-id"]);
+  expect(event.tags).toMatchObject({
+    operation: "http.exception",
+    errorCode: "PASSWORD_CHANGE_UNCONFIRMED",
+  });
+  expect(JSON.stringify(event)).not.toContain("unconfirmed-password-secret");
+  const logs = await (await request.get(`${collector}/logs`)).json();
+  expect(logs).toHaveLength(1);
+  expect(logs[0]).toMatchObject({
+    status: 503,
+    level: 50,
+    errorCode: "PASSWORD_CHANGE_UNCONFIRMED",
+  });
+});
+
+test("reports a limiter-store failure during successful logout without duplicating completion logs", async ({
+  request,
+  baseURL,
+}) => {
+  const db = new Pool({
+    connectionString:
+      "postgresql://browser_e2e:browser_e2e@127.0.0.1:5435/browser_e2e",
+  });
+  try {
+    await db.query(
+      "ALTER TABLE rate_limit_buckets RENAME TO unavailable_buckets",
+    );
+    try {
+      const response = await request.post("/api/auth/staff/logout", {
+        headers: { Origin: baseURL! },
+      });
+      expect(response.status()).toBe(200);
+      expect(response.headers()["set-cookie"]).toContain("Max-Age=0");
+      const requestId = response.headers()["x-request-id"];
+      await expect
+        .poll(
+          async () =>
+            (await (await request.get(`${collector}/events`)).json()).length,
+        )
+        .toBe(1);
+      const [event]: Event[] = await (
+        await request.get(`${collector}/events`)
+      ).json();
+      expect(event.tags).toMatchObject({
+        operation: "rate-limit.consume",
+        audience: "staff",
+        requestId,
+      });
+      const logs = await (await request.get(`${collector}/logs`)).json();
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({ status: 200, level: 30, requestId });
+      const output = await (await request.get(`${collector}/output`)).json();
+      const failures = output.stderr
+        .split("\n")
+        .filter((line: string) => line.startsWith("{"))
+        .map((line: string) => JSON.parse(line))
+        .filter(
+          (record: { msg: string }) =>
+            record.msg === "Request dependency failed",
+        );
+      expect(failures).toEqual([
+        expect.objectContaining({
+          operation: "rate-limit.consume",
+          errorCode: "SERVICE_UNAVAILABLE",
+          requestId,
+          level: 50,
+        }),
+      ]);
+    } finally {
+      await db.query(
+        "ALTER TABLE unavailable_buckets RENAME TO rate_limit_buckets",
+      );
+    }
+  } finally {
+    await db.end();
+  }
 });

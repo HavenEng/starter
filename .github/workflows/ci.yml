@@ -23,11 +23,13 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm api:check
       - run: pnpm test
       - run: pnpm db:check
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - run: pnpm test:e2e --config playwright.observability.config.ts
+      - run: pnpm test:e2e --config playwright.rate-limit.config.ts
       - run: pnpm test:e2e:auth
       - run: pnpm test:auth-harness

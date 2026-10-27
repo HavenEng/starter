@@ -13,10 +13,10 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm dev --hostname 127.0.0.1 --port 3100",
+    command: "node scripts/browser-e2e-server.mjs",
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    gracefulShutdown: { signal: "SIGTERM", timeout: 1_000 },
+    reuseExistingServer: false,
+    gracefulShutdown: { signal: "SIGTERM", timeout: 30_000 },
     timeout: 120_000,
   },
 });

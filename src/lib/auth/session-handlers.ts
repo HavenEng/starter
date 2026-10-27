@@ -1,8 +1,11 @@
 import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { updateStaffUserFromFirebase } from "@/db/staff-users";
-import { syncUserFromFirebase } from "@/db/users";
+import {
+  updateStaffUserFromFirebase,
+  getStaffUserByFirebaseUid,
+} from "@/db/staff-users";
+import { syncUserFromFirebase, getUserByFirebaseUid } from "@/db/users";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { isRecentAuthentication } from "@/lib/auth/recent-auth";
 import {
@@ -10,8 +13,8 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/auth/read-request-body";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
-import { reportUnexpectedError } from "@/lib/observability/report";
-import { getRequestId } from "@/lib/observability/request-logging";
+import { isExpectedError } from "@/lib/observability/report";
+import { ApplicationError, errors } from "@/lib/api/application-error";
 import {
   SESSION_DURATION_MS,
   STAFF_SESSION_COOKIE_NAME,
@@ -20,11 +23,8 @@ import {
 
 const MAX_REQUEST_BYTES = 12_000;
 
-function reject(message: string, status: number) {
-  return NextResponse.json(
-    { error: message },
-    { status, headers: { "Cache-Control": "no-store" } },
-  );
+function reject(message: string, status: number): never {
+  throw new ApplicationError(`AUTH_${status}`, status, message);
 }
 
 function getCookieName(audience: AuthAudience) {
@@ -90,17 +90,15 @@ export async function createSession(
     return reject("A valid Firebase ID token is required.", 400);
   }
 
-  const firebaseAuth = getFirebaseAdminAuth(audience);
+  let firebaseAuth;
   let claims;
 
   try {
+    firebaseAuth = getFirebaseAdminAuth(audience);
     claims = await firebaseAuth.verifyIdToken(idToken, true);
   } catch (error) {
-    reportUnexpectedError(error, {
-      operation: "auth.verify-id-token",
-      audience,
-      requestId: getRequestId(),
-    });
+    if (!isExpectedError(error, "auth.verify-id-token"))
+      throw errors.unavailable(error);
     return reject("The Firebase sign-in token is invalid.", 401);
   }
 
@@ -111,6 +109,12 @@ export async function createSession(
   if (!isRecentAuthentication(claims.auth_time)) {
     return reject("Please sign in again to start a session.", 401);
   }
+
+  const existing =
+    audience === "staff"
+      ? await getStaffUserByFirebaseUid(claims.uid)
+      : await getUserByFirebaseUid(claims.uid);
+  if (existing?.disabledAt) return reject("This account is disabled.", 403);
 
   if (audience === "staff") {
     const staffUser = await updateStaffUserFromFirebase(claims);

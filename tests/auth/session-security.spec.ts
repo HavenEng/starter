@@ -229,7 +229,7 @@ for (const audience of ["user", "staff"] as const) {
         variant === "future" ||
         variant === "missing-time"
       )
-        expect(await rejected.json()).toEqual({
+        expect(await rejected.json()).toMatchObject({
           error: "Please sign in again to start a session.",
         });
       expect(rejected.headers()["set-cookie"]).toBeUndefined();
