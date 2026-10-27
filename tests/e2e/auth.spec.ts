@@ -16,6 +16,34 @@ const audiences = [
   },
 ] as const;
 
+for (const path of ["/signup", "/login", "/staff/login"]) {
+  test(`${path} rejects passwords over 64 characters before calling Firebase`, async ({
+    page,
+  }) => {
+    await page.goto(path);
+    await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute(
+      "maxlength",
+      "64",
+    );
+    await page.getByLabel("Email", { exact: true }).fill("length@example.test");
+    await page.locator("form").evaluate((form) => {
+      form.querySelector<HTMLInputElement>('input[name="password"]')!.value =
+        "x".repeat(65);
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    await expect(
+      page.getByText(
+        path === "/signup"
+          ? "Use a password of 8 to 64 characters."
+          : "Enter a password of up to 64 characters.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  });
+}
+
 for (const { path, loginPath, heading } of [
   { path: "/account", loginPath: "/login", heading: "Welcome back" },
   { path: "/private", loginPath: "/staff/login", heading: "Staff sign in" },
@@ -124,7 +152,7 @@ for (const hostname of ["127.0.0.1", "localhost"]) {
 
       // An empty token should reach validation instead of failing the origin check.
       expect(result.sessionStatus).toBe(400);
-      expect(result.sessionBody).toEqual({
+      expect(result.sessionBody).toMatchObject({
         error: "A valid Firebase ID token is required.",
       });
       expect(result.logoutStatus).toBe(200);
@@ -184,7 +212,7 @@ for (const audience of audiences) {
     );
 
     expect(response.status).toBe(413);
-    expect(JSON.parse(response.body)).toEqual({
+    expect(JSON.parse(response.body)).toMatchObject({
       error: "Request is too large.",
     });
   });
@@ -202,7 +230,9 @@ for (const audience of audiences) {
     });
 
     expect(response.status()).toBe(413);
-    expect(await response.json()).toEqual({ error: "Request is too large." });
+    expect(await response.json()).toMatchObject({
+      error: "Request is too large.",
+    });
   });
 
   for (const action of ["session", "logout"]) {
@@ -229,7 +259,7 @@ for (const audience of audiences) {
           });
 
           expect(response.status()).toBe(403);
-          expect(await response.json()).toEqual({
+          expect(await response.json()).toMatchObject({
             error: "Invalid request origin.",
           });
           expect(response.headers()["set-cookie"]).toBeUndefined();

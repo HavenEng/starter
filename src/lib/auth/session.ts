@@ -2,10 +2,11 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { getUserByFirebaseUid } from "@/db/users";
-import { getStaffUserByFirebaseUid } from "@/db/staff-users";
+import { getStaffUserByFirebaseUid, getStaffRoleKeys } from "@/db/staff-users";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
-import { reportUnexpectedError } from "@/lib/observability/report";
+import { isExpectedError } from "@/lib/observability/report";
+import { errors } from "@/lib/api/application-error";
 
 export const USER_SESSION_COOKIE_NAME = "firebase_session";
 export const STAFF_SESSION_COOKIE_NAME = "firebase_staff_session";
@@ -26,11 +27,8 @@ async function getSessionClaims(audience: AuthAudience, cookieName: string) {
       true,
     );
   } catch (error) {
-    reportUnexpectedError(error, {
-      operation: "auth.verify-session",
-      audience,
-    });
-    return null;
+    if (isExpectedError(error, "auth.verify-session")) return null;
+    throw errors.unavailable(error);
   }
 
   if (claims.firebase.sign_in_provider !== "password") {
@@ -47,7 +45,8 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return getUserByFirebaseUid(claims.uid);
+  const user = await getUserByFirebaseUid(claims.uid);
+  return user && !user.disabledAt ? user : null;
 }
 
 export async function getCurrentStaffUser() {
@@ -57,5 +56,8 @@ export async function getCurrentStaffUser() {
     return null;
   }
 
-  return getStaffUserByFirebaseUid(claims.uid);
+  const user = await getStaffUserByFirebaseUid(claims.uid);
+  return user && !user.disabledAt
+    ? { ...user, roles: await getStaffRoleKeys(user.id) }
+    : null;
 }

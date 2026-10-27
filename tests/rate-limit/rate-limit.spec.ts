@@ -71,6 +71,27 @@ test("route overrides throttle earlier and recover when the stored window expire
     ).status(),
   ).toBe(400);
 });
+test("password reset form shows only the generic throttle message", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  for (let i = 0; i < 2; i++)
+    expect(
+      (
+        await request.post("/api/auth/password-reset", {
+          headers: { Origin: baseURL! },
+          data: { email: "invalid" },
+        })
+      ).status(),
+    ).toBe(400);
+  await page.goto("/reset-password");
+  await page.getByLabel("Email", { exact: true }).fill("test@example.test");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect(
+    page.getByText("Too many requests", { exact: true }),
+  ).toBeVisible();
+});
 test("store outages return a logged operational failure while logout can still clear its cookie", async ({
   request,
   baseURL,

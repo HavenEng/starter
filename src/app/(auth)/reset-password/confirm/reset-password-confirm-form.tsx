@@ -2,18 +2,29 @@
 
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LogoutButton } from "@/app/account/logout-button";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getAuthPath } from "@/lib/auth/audience";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { reportUnexpectedError } from "@/lib/observability/report";
+import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  PASSWORD_LENGTH_MESSAGE,
+} from "@/lib/auth/password-policy";
 
 type ResetPasswordConfirmFormProps = {
   oobCode: string;
   audience?: AuthAudience;
 };
 
-type VerificationState = "checking" | "ready" | "invalid" | "complete";
+type VerificationState =
+  "checking" | "ready" | "invalid" | "complete" | "unconfirmed";
+
+const RESET_CONFIRMATION_TIMEOUT_MS = 30_000;
+const unconfirmedMessage =
+  "We couldn’t confirm the password update. Please sign in to continue.";
 
 function getFirebaseErrorCode(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
@@ -32,9 +43,9 @@ function getConfirmErrorMessage(error: unknown) {
     case "auth/password-does-not-meet-requirements":
       return "Choose a password that meets the password requirements.";
     case "auth/too-many-requests":
-      return "Too many attempts. Wait a little while before trying again.";
+      return "Too many requests";
     default:
-      return "We could not update your password. Please try again.";
+      return unconfirmedMessage;
   }
 }
 
@@ -52,13 +63,13 @@ const ResetPasswordConfirmForm = ({
   audience = "user",
 }: ResetPasswordConfirmFormProps) => {
   const resetPath = getAuthPath(audience, "/reset-password");
-  const loginPath = getAuthPath(audience, "/login");
   const [verification, setVerification] =
     useState<VerificationState>("checking");
   const [email, setEmail] = useState("");
   const [verificationError, setVerificationError] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitting = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -112,29 +123,74 @@ const ResetPasswordConfirmForm = ({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    if (submitting.current || verification !== "ready") return;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const password = String(formData.get("password") ?? "");
     const passwordConfirmation = String(
       formData.get("passwordConfirmation") ?? "",
     );
 
     setError(null);
+    if (
+      password.length < MIN_PASSWORD_LENGTH ||
+      password.length > MAX_PASSWORD_LENGTH
+    ) {
+      setError(PASSWORD_LENGTH_MESSAGE);
+      return;
+    }
     if (password !== passwordConfirmation) {
       setError("The passwords do not match.");
       return;
     }
 
+    submitting.current = true;
     setIsSubmitting(true);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      await confirmPasswordReset(getFirebaseAuth(audience), oobCode, password);
+      // The SDK cannot cancel this mutation. Racing the UI timeout leaves any
+      // late provider result unable to replace recovery or trigger another reset.
+      await Promise.race([
+        confirmPasswordReset(getFirebaseAuth(audience), oobCode, password),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("Password reset confirmation timed out.")),
+            RESET_CONFIRMATION_TIMEOUT_MS,
+          );
+        }),
+      ]);
+      form.reset();
       setVerification("complete");
     } catch (submitError) {
       reportUnexpectedError(submitError, {
         operation: "auth.confirm-password-reset",
         audience,
       });
-      setError(getConfirmErrorMessage(submitError));
+      const code = getFirebaseErrorCode(submitError);
+      if (
+        [
+          "auth/weak-password",
+          "auth/password-does-not-meet-requirements",
+          "auth/too-many-requests",
+        ].includes(code)
+      ) {
+        setError(getConfirmErrorMessage(submitError));
+      } else {
+        form.reset();
+        if (
+          ["auth/expired-action-code", "auth/invalid-action-code"].includes(
+            code,
+          )
+        ) {
+          setVerificationError(getConfirmErrorMessage(submitError));
+          setVerification("invalid");
+        } else {
+          setVerification("unconfirmed");
+        }
+      }
     } finally {
+      clearTimeout(timeout);
+      submitting.current = false;
       setIsSubmitting(false);
     }
   };
@@ -147,7 +203,9 @@ const ResetPasswordConfirmForm = ({
       <h1 className="mt-3 text-3xl font-semibold tracking-tight">
         {verification === "complete"
           ? "Password updated"
-          : "Choose a new password"}
+          : verification === "unconfirmed"
+            ? "Sign in again"
+            : "Choose a new password"}
       </h1>
       {verification === "checking" ? (
         <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
@@ -179,18 +237,31 @@ const ResetPasswordConfirmForm = ({
             </a>
           </p>
         </>
+      ) : verification === "unconfirmed" ? (
+        <div className="mt-3 space-y-5">
+          <p
+            role="alert"
+            className="text-sm leading-6 text-zinc-600 dark:text-zinc-400"
+          >
+            {unconfirmedMessage}
+          </p>
+          <LogoutButton audience={audience} intent="sign-in-again" />
+          <a
+            className="inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            href={resetPath}
+          >
+            Request a new reset link
+          </a>
+        </div>
       ) : verification === "complete" ? (
         <>
           <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             Your password has been updated. You can now sign in with the new
             password.
           </p>
-          <a
-            className="mt-6 inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-            href={loginPath}
-          >
-            Return to sign in
-          </a>
+          <div className="mt-6">
+            <LogoutButton audience={audience} intent="sign-in-again" />
+          </div>
         </>
       ) : (
         <>
@@ -203,8 +274,10 @@ const ResetPasswordConfirmForm = ({
               <input
                 autoComplete="new-password"
                 className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 dark:border-zinc-700"
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 name="password"
+                readOnly={isSubmitting}
                 required
                 type="password"
               />
@@ -214,8 +287,10 @@ const ResetPasswordConfirmForm = ({
               <input
                 autoComplete="new-password"
                 className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 dark:border-zinc-700"
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 name="passwordConfirmation"
+                readOnly={isSubmitting}
                 required
                 type="password"
               />

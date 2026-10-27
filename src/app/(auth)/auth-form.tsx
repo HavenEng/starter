@@ -14,6 +14,11 @@ import type { AuthAudience } from "@/lib/auth/audience";
 import { getAuthPath, getSessionApiPath } from "@/lib/auth/audience";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  PASSWORD_LENGTH_MESSAGE,
+} from "@/lib/auth/password-policy";
+import {
   AuthResponseError,
   reportUnexpectedError,
   SENTRY_EVENT_ID_HEADER,
@@ -92,6 +97,18 @@ const AuthForm = ({ mode, audience = "user" }: AuthFormProps) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     setError(null);
+    const password = String(formData.get("password") ?? "");
+    if (
+      password.length > MAX_PASSWORD_LENGTH ||
+      (isCreatingAccount && password.length < MIN_PASSWORD_LENGTH)
+    ) {
+      setError(
+        isCreatingAccount
+          ? PASSWORD_LENGTH_MESSAGE
+          : `Enter a password of up to ${MAX_PASSWORD_LENGTH} characters.`,
+      );
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -99,7 +116,6 @@ const AuthForm = ({ mode, audience = "user" }: AuthFormProps) => {
       await setPersistence(auth, inMemoryPersistence);
 
       const email = createdEmail ?? String(formData.get("email") ?? "").trim();
-      const password = String(formData.get("password") ?? "");
       const credential = isCreatingAccount
         ? await createUserWithEmailAndPassword(auth, email, password)
         : await signInWithEmailAndPassword(auth, email, password);
@@ -160,7 +176,8 @@ const AuthForm = ({ mode, audience = "user" }: AuthFormProps) => {
               isCreatingAccount ? "new-password" : "current-password"
             }
             className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 dark:border-zinc-700"
-            minLength={isCreatingAccount ? 8 : undefined}
+            minLength={isCreatingAccount ? MIN_PASSWORD_LENGTH : undefined}
+            maxLength={MAX_PASSWORD_LENGTH}
             name="password"
             readOnly={isSubmitting}
             required

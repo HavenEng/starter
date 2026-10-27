@@ -9,8 +9,14 @@ test("signup creates a Firebase identity, database record, and persistent secure
   scenario,
 }) => {
   await page.goto("/signup");
+  await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute(
+    "maxlength",
+    "64",
+  );
   await page.getByLabel("Email", { exact: true }).fill(scenario.email);
-  await page.getByLabel("Password", { exact: true }).fill(scenario.password);
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("Aa1!" + "x".repeat(60));
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
@@ -314,7 +320,25 @@ for (const audience of ["user", "staff"] as const) {
     await expect(
       page.getByText(`Set a new password for ${scenario.email}.`),
     ).toBeVisible();
-    const newPassword = "Updated-starter-9!";
+    for (const label of ["New password", "Confirm new password"]) {
+      await expect(page.getByLabel(label, { exact: true })).toHaveAttribute(
+        "maxlength",
+        "64",
+      );
+    }
+    await page.locator("form").evaluate((form) => {
+      for (const input of form.querySelectorAll<HTMLInputElement>(
+        'input[type="password"]',
+      ))
+        input.value = "x".repeat(65);
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    await expect(
+      page.getByText("Use a password of 8 to 64 characters.", { exact: true }),
+    ).toBeVisible();
+    const newPassword = "Aa1!" + "x".repeat(60);
     await page.getByLabel("New password", { exact: true }).fill(newPassword);
     await page
       .getByLabel("Confirm new password", { exact: true })

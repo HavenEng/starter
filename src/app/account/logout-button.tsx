@@ -8,16 +8,24 @@ import {
   SENTRY_EVENT_ID_HEADER,
 } from "@/lib/observability/report";
 import type { AuthAudience } from "@/lib/auth/audience";
-import { getSessionApiPath } from "@/lib/auth/audience";
+import { getAuthPath, getSessionApiPath } from "@/lib/auth/audience";
 
 type LogoutButtonProps = {
   audience?: AuthAudience;
+  intent?: "sign-out" | "sign-in-again";
 };
 
-const LogoutButton = ({ audience = "user" }: LogoutButtonProps) => {
+const LogoutButton = ({
+  audience = "user",
+  intent = "sign-out",
+}: LogoutButtonProps) => {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signInAgain = intent === "sign-in-again";
+  const failureMessage = signInAgain
+    ? "We could not prepare sign-in. Please try again."
+    : "We could not sign you out. Please try again.";
 
   const handleLogout = async () => {
     setError(null);
@@ -27,9 +35,20 @@ const LogoutButton = ({ audience = "user" }: LogoutButtonProps) => {
       const response = await fetch(getSessionApiPath(audience, "logout"), {
         method: "POST",
         credentials: "same-origin",
+        signal: signInAgain ? AbortSignal.timeout(10_000) : undefined,
       });
 
-      if (response.ok) {
+      const cleared =
+        response.ok &&
+        (!signInAgain ||
+          (await response.json().catch(() => null))?.ok === true);
+      if (cleared) {
+        if (signInAgain) {
+          // A full navigation avoids cached authenticated redirects and drops
+          // in-memory form/auth state only after the cookie has been cleared.
+          window.location.assign(getAuthPath(audience, "/login"));
+          return;
+        }
         router.replace(audience === "staff" ? "/staff/login" : "/");
         return;
       }
@@ -42,10 +61,10 @@ const LogoutButton = ({ audience = "user" }: LogoutButtonProps) => {
         ),
         { operation: "auth.logout", audience },
       );
-      setError("We could not sign you out. Please try again.");
+      setError(failureMessage);
     } catch (error) {
       reportUnexpectedError(error, { operation: "auth.logout", audience });
-      setError("We could not sign you out. Please try again.");
+      setError(failureMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -59,7 +78,13 @@ const LogoutButton = ({ audience = "user" }: LogoutButtonProps) => {
         onClick={handleLogout}
         type="button"
       >
-        {isSubmitting ? "Signing out…" : "Sign out"}
+        {isSubmitting
+          ? signInAgain
+            ? "Preparing sign-in…"
+            : "Signing out…"
+          : signInAgain
+            ? "Sign in again"
+            : "Sign out"}
       </button>
       {error ? (
         <p

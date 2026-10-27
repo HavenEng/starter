@@ -25,6 +25,12 @@ const AccountPage = async () => {
         </div>
       </dl>
       <div>
+        <a
+          className="mr-4 text-blue-600 underline"
+          href="/account/change-password"
+        >
+          Change password
+        </a>
         <LogoutButton />
       </div>
     </main>

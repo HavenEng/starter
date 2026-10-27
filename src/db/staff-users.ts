@@ -3,7 +3,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { getDb } from "@/db";
-import { staffUsers } from "@/db/schema";
+import { staffUsers, staffUserRoles, roles } from "@/db/schema";
 
 export async function updateStaffUserFromFirebase(claims: DecodedIdToken) {
   const profile = {
@@ -30,4 +30,13 @@ export async function getStaffUserByFirebaseUid(firebaseUid: string) {
     .limit(1);
 
   return user ?? null;
+}
+
+export async function getStaffRoleKeys(staffUserId: string) {
+  const assignments = await getDb()
+    .select({ key: roles.key })
+    .from(staffUserRoles)
+    .innerJoin(roles, eq(staffUserRoles.roleId, roles.id))
+    .where(eq(staffUserRoles.staffUserId, staffUserId));
+  return assignments.map((role) => role.key);
 }

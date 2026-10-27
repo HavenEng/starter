@@ -1,36 +1,17 @@
 "use client";
 
-import { sendPasswordResetEmail } from "firebase/auth";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import type { AuthAudience } from "@/lib/auth/audience";
 import { getAuthPath } from "@/lib/auth/audience";
-import { getFirebaseAuth } from "@/lib/firebase/client";
-import { reportUnexpectedError } from "@/lib/observability/report";
+import {
+  AuthResponseError,
+  reportUnexpectedError,
+} from "@/lib/observability/report";
 
 type ResetPasswordRequestFormProps = {
   audience?: AuthAudience;
 };
-
-function getRequestErrorMessage(error: unknown) {
-  const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String(error.code)
-      : "";
-
-  switch (code) {
-    case "auth/invalid-email":
-      return "Enter a valid email address.";
-    case "auth/too-many-requests":
-      return "Too many requests. Wait a little while before trying again.";
-    case "auth/unauthorized-domain":
-      return "This domain is not authorized in Firebase Authentication.";
-    case "auth/operation-not-allowed":
-      return "Enable Email/Password sign-in in the Firebase console first.";
-    default:
-      return "We could not send a reset email. Please try again.";
-  }
-}
 
 const ResetPasswordRequestForm = ({
   audience = "user",
@@ -51,27 +32,37 @@ const ResetPasswordRequestForm = ({
     setIsSubmitting(true);
 
     try {
-      await sendPasswordResetEmail(getFirebaseAuth(audience), submittedEmail);
+      const response = await fetch(
+        `/api/auth/${audience === "staff" ? "staff/" : ""}password-reset`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: submittedEmail }),
+        },
+      );
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        reportUnexpectedError(
+          new AuthResponseError(
+            "Password reset request failed",
+            response.status,
+            response.headers.get("x-request-id") ?? undefined,
+            response.headers.get("x-sentry-event-id") ?? undefined,
+          ),
+          { operation: "auth.request-password-reset", audience },
+        );
+        setError(
+          result?.error || "We could not send a reset email. Please try again.",
+        );
+        return;
+      }
       setSent(true);
     } catch (submitError) {
       reportUnexpectedError(submitError, {
         operation: "auth.request-password-reset",
         audience,
       });
-      const code =
-        typeof submitError === "object" &&
-        submitError !== null &&
-        "code" in submitError
-          ? String(submitError.code)
-          : "";
-
-      // Keep the response the same for unknown accounts when enumeration
-      // protection is disabled for this Firebase project.
-      if (code === "auth/user-not-found") {
-        setSent(true);
-      } else {
-        setError(getRequestErrorMessage(submitError));
-      }
+      setError("We could not send a reset email. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

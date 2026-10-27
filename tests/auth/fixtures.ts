@@ -79,6 +79,12 @@ export const test = base.extend<{ scenario: Scenario }, { services: Services }>(
                 "INSERT INTO staff_users (firebase_uid, email, display_name, email_verified) VALUES ($1, $2, $3, true)",
                 [uid, "provisioned@example.test", "Provisioned profile"],
               );
+              await services.db.query(
+                `INSERT INTO staff_user_roles (staff_user_id, role_id)
+                SELECT s.id, r.id FROM staff_users s CROSS JOIN roles r WHERE s.firebase_uid = $1 AND r.key = 'staff'
+                ON CONFLICT DO NOTHING`,
+                [uid],
+              );
             }
           },
         });

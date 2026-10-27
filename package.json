@@ -22,6 +22,7 @@
     "db:studio": "drizzle-kit studio",
     "db:smoke": "node scripts/db-smoke.mjs",
     "db:seed": "node scripts/db-seed.mjs",
+    "staff:bootstrap-admin": "node scripts/staff-bootstrap-admin.mjs",
     "api:check": "node scripts/check-api-handlers.mjs",
     "db:rate-limit:prune": "node scripts/rate-limit-prune.mjs"
   },

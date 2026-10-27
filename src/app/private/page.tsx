@@ -1,8 +1,9 @@
 import { LogoutButton } from "@/app/account/logout-button";
-import { requireStaffUser } from "@/lib/auth/require-staff-user";
+import { requireStaffScope } from "@/lib/auth/require-staff-scope";
+import { AccessDenied } from "@/components/access-denied";
 
 const PrivatePage = async () => {
-  await requireStaffUser();
+  if (!(await requireStaffScope("staff:portal:read"))) return <AccessDenied />;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-6 py-16">
@@ -14,6 +15,12 @@ const PrivatePage = async () => {
         This route is available to authenticated staff accounts.
       </p>
       <div>
+        <a
+          className="mr-4 text-blue-600 underline"
+          href="/private/account/change-password"
+        >
+          Change password
+        </a>
         <LogoutButton audience="staff" />
       </div>
     </main>
